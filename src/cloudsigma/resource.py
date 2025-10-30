@@ -705,16 +705,16 @@ class RemoteSnapshot(ResourceBase):
 
     def clone(self, uuid, data=None, avoid=None):
         """
-        Clone a drive from a remote snapshot.
+        Clone a remote snapshot to a drive.
 
         :param uuid:
-            Source drive for the clone.
+            Source remote snapshot for the clone.
         :param data:
             Clone drive options. Refer to API docs for possible options.
         :param avoid:
             A list of drive or server uuids to avoid for the clone.
-            Avoid attempts to put the clone on a different
-            physical storage host from the drives in *avoid*.
+            Avoid attempts to put the clone on a different physical storage
+            host from the drives in *avoid*.
             If a server uuid is in *avoid* it is internally expanded
             to the drives attached to the server.
         :return:
@@ -728,6 +728,17 @@ class RemoteSnapshot(ResourceBase):
             query_params['avoid'] = ','.join(avoid)
 
         return self._action(uuid, 'clone', data, query_params=query_params)
+
+    def delete_multiple(self, uuids):
+        """
+        Deletes multiple remote snapshots specified by their UUIDs.
+
+        :param uuids:
+            A list of remote snapshot UUIDs to delete.
+        """
+        data = {'objects': [{'uuid': u} for u in uuids]}
+        url = self._get_url()
+        return self.c.delete(url, data=data)
 
 
 class Vpc(ResourceBase):
