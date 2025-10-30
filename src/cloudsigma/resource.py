@@ -678,25 +678,42 @@ class Snapshot(ResourceBase):
 class Tags(ResourceBase):
     resource_name = 'tags'
 
-    def list_resource(self, uuid, resource_name):
-        url = '{base}{tag_uuid}/{res_name}/'.format(
-            base=self._get_url(),
-            tag_uuid=uuid,
-            res_name=resource_name
-        )
-        return self.c.get(url, return_list=True)
+    def list_resources(self, uuid, resource_type, query_params=None):
+        """
+        Lists the objects of the given resource_type which is one of 'servers', 'drives', 'ips', 'vlans'.
+
+        :param uuid:
+            UUID of the tag.
+        :type uuid: basestring
+        :param resource_type:
+            Type of resource to list. Must be one of 'servers', 'drives', 'ips', 'vlans'.
+        :type resource_type: basestring
+        :param query_params:
+            Additional query parameters to pass to the API call.
+        :type query_params: dict
+        :return:
+            A list of resources associated with the tag.
+        :rtype: list
+        """
+        url = self._get_url() + uuid + '/' + resource_type + '/'
+        _query_params = {
+            'limit': 0,  # get all results, do not use pagination
+        }
+        if query_params:
+            _query_params.update(query_params)
+        return self.c.get(url, query_params=_query_params, return_list=True)
 
     def drives(self, uuid):
-        return self.list_resource(uuid, 'drives')
+        return self.list_resources(uuid, 'drives')
 
     def servers(self, uuid):
-        return self.list_resource(uuid, 'servers')
+        return self.list_resources(uuid, 'servers')
 
     def ips(self, uuid):
-        return self.list_resource(uuid, 'ips')
+        return self.list_resources(uuid, 'ips')
 
     def vlans(self, uuid):
-        return self.list_resource(uuid, 'vlans')
+        return self.list_resources(uuid, 'vlans')
 
 
 class Acls(ResourceBase):
