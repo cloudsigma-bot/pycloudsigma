@@ -116,6 +116,15 @@ class Profile(ResourceBase):
         return self.c.get(self._get_url(), return_list=False)
 
     def update(self, data):
+        """
+        Edits a user profile.
+
+        :param data:
+            The profile data to update.
+        :type data: dict
+        :return:
+            The updated user profile object.
+        """
         return self.c.put(self._get_url(), data, return_list=False)
 
 
@@ -1172,3 +1181,4 @@ class Pubkeys(ResourceBase):
 
 class VmwareServers(ResourceBase):
     resource_name = 'vmware_servers'
+
