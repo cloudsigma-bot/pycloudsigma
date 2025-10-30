@@ -248,6 +248,22 @@ class Drive(ResourceBase):
         }
         return requests.post(self.c._get_full_url(link), data=data, headers=headers)
 
+    def bulk_delete(self, uuids, query_params=None):
+        """
+        Deletes multiple drives.
+
+        :param uuids:
+            A list of drive UUIDs to delete.
+        :type uuids: list
+        :param query_params:
+            Additional query parameters.
+        :return:
+            API response.
+        """
+        data = {'objects': [{'uuid': uuid} for uuid in uuids]}
+        url = self._get_url()
+        return self.c.delete(url, data=data, query_params=query_params)
+
 
 class InitUpload(ResourceBase):
     resource_name = 'initupload'
@@ -782,5 +798,4 @@ class VrFwFilters(ResourceBase):
 
 class Routes(ResourceBase):
     resource_name = 'routes'
-
 
