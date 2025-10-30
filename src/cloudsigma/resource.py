@@ -148,6 +148,23 @@ class NotificationPreference(ResourceBase):
     def update(self, data):
         return self.c.put(self._get_url(), data, return_list=True)
 
+    def update_collection(self, data):
+        """
+        Updates multiple notification preferences.
+
+        :param data:
+            A dictionary or list of dictionaries representing the preferences to update.
+            Each dictionary should contain 'contact', 'medium', 'type', and 'value'.
+        :return:
+            The updated notification preferences.
+        """
+        url = self._get_url()
+        return self.c.put(
+            url,
+            self._pepare_data(data),
+            return_list=True
+        )
+
 
 class LibDrive(ResourceBase):
     resource_name = 'libdrives'
@@ -1181,5 +1198,6 @@ class Pubkeys(ResourceBase):
 
 class VmwareServers(ResourceBase):
     resource_name = 'vmware_servers'
+
 
 
