@@ -310,7 +310,7 @@ class Drive(ResourceBase):
 
     def delete_multiple(self, data):
         """
-        Deletes multiple drives specified by their UUIDs.
+        Deletes multiple mounted or unmounted drives specified by their UUIDs.
 
         :param data:
             A list of drive UUIDs or a dictionary with an 'objects' key
@@ -1181,4 +1181,5 @@ class Pubkeys(ResourceBase):
 
 class VmwareServers(ResourceBase):
     resource_name = 'vmware_servers'
+
 
