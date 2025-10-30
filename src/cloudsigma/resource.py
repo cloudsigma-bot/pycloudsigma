@@ -825,6 +825,10 @@ class CurrentUsage(ResourceBase):
     resource_name = 'currentusage'
 
 
+class Usage(ResourceBase):
+    resource_name = 'usage'
+
+
 class Snapshot(ResourceBase):
     resource_name = 'snapshots'
 
