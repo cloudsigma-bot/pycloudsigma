@@ -116,6 +116,15 @@ class Profile(ResourceBase):
         return self.c.get(self._get_url(), return_list=False)
 
     def update(self, data):
+        """
+        Edits a user profile.
+
+        :param data:
+            The profile data to update.
+        :type data: dict
+        :return:
+            The updated user profile object.
+        """
         return self.c.put(self._get_url(), data, return_list=False)
 
 
@@ -139,9 +148,40 @@ class NotificationPreference(ResourceBase):
     def update(self, data):
         return self.c.put(self._get_url(), data, return_list=True)
 
+    def update_collection(self, data):
+        """
+        Updates multiple notification preferences.
+
+        :param data:
+            A dictionary or list of dictionaries representing the preferences to update.
+            Each dictionary should contain 'contact', 'medium', 'type', and 'value'.
+        :return:
+            The updated notification preferences.
+        """
+        url = self._get_url()
+        return self.c.put(
+            url,
+            self._pepare_data(data),
+            return_list=True
+        )
+
 
 class LibDrive(ResourceBase):
     resource_name = 'libdrives'
+
+    def clone(self, uuid, data=None):
+        """
+        Clones a library drive.
+
+        :param uuid:
+            Source library drive for the clone.
+        :param data:
+            Clone drive options. Refer to API docs for possible options.
+        :return:
+            Cloned drive definition.
+        """
+        data = data or {}
+        return self._action(uuid, 'clone', data)
 
 
 class Drive(ResourceBase):
@@ -248,6 +288,58 @@ class Drive(ResourceBase):
         }
         return requests.post(self.c._get_full_url(link), data=data, headers=headers)
 
+    def bulk_delete(self, uuids, query_params=None):
+        """
+        Deletes multiple drives.
+
+        :param uuids:
+            A list of drive UUIDs to delete.
+        :type uuids: list
+        :param query_params:
+            Additional query parameters.
+        :return:
+            API response.
+        """
+        data = {'objects': [{'uuid': uuid} for uuid in uuids]}
+        url = self._get_url()
+        return self.c.delete(url, data=data, query_params=query_params)
+
+    def set_scheduler(self, drive_uuid, backup_policy_uuid, data=None, query_params=None):
+        """
+        Link a scheduler to a drive.
+
+        :param drive_uuid:
+            UUID of the drive to link the scheduler to.
+        :type drive_uuid: str
+        :param backup_policy_uuid:
+            UUID of the backup policy to set.
+        :type backup_policy_uuid: str
+        :param data:
+            Additional data for the action (optional).
+        :param query_params:
+            Additional query parameters to send with the request.
+        :return:
+            Updated drive definition.
+        """
+        data = data or {}
+        data['backup_policy_uuid'] = backup_policy_uuid
+        return self._action(drive_uuid, 'set_scheduler', data, query_params=query_params)
+
+    def delete_multiple(self, data):
+        """
+        Deletes multiple mounted or unmounted drives specified by their UUIDs.
+
+        :param data:
+            A list of drive UUIDs or a dictionary with an 'objects' key
+            containing a list of dictionaries with 'uuid' keys.
+            Example: [{'uuid': 'uuid1'}, {'uuid': 'uuid2'}] or
+            {'objects': [{'uuid': 'uuid1'}, {'uuid': 'uuid2'}]}.
+        :return:
+            None (204 No Content)
+        """
+        url = self._get_url()
+        return self.c.delete(url, data=self._pepare_data(data))
+
 
 class InitUpload(ResourceBase):
     resource_name = 'initupload'
@@ -284,13 +376,86 @@ class InitUpload(ResourceBase):
 class Server(ResourceBase):
     resource_name = 'servers'
 
-    def start(self, uuid, allocation_method=None):
+    def list_availability_groups(self):
+        """
+        Returns which running servers share the same physical computer host.
+        Returns an array containing arrays. Each inner array holds the UUIDs of servers
+        that reside on the same physical host. Non-running servers are not in the
+        array as they are on any host.
+        """
+        url = self._get_url() + 'availability_groups/'
+        return self.c.get(url, return_list=True)
+
+    def get_availability_group(self, uuid):
+        """
+        Queries in which other servers share the same physical host as the given one.
+        Returns an array holding server UUIDs. The response includes also the UUID
+        of the queried server. If the queried server is not running, the array will be empty.
+
+        :param uuid:
+            UUID of the server.
+        """
+        url = self._get_url() + 'availability_groups/%s/' % uuid
+        return self.c.get(url, return_list=True)
+
+    def delete_recursive(self, uuid, recurse_option):
+        """
+        Deletes a server and optionally its attached drives.
+
+        :param uuid:
+            UUID of the server.
+        :param recurse_option:
+            'all_drives': All attached drives regardless of media type will be deleted.
+            'disks': Only attached drives with media type 'disk' will be deleted.
+            'cdroms': Only attached drives with media type 'cdrom' will be deleted.
+        """
+        if recurse_option not in ['all_drives', 'disks', 'cdroms']:
+            raise ValueError(
+                "recurse_option must be one of 'all_drives', 'disks', 'cdroms'"
+            )
+        query_params = {'recurse': recurse_option}
+        return self.delete(uuid, query_params=query_params)
+
+    def start(self, uuid, allocation_method=None, avoid=None):
+        """
+        Starts a server with a specific UUID, optionally attempting to run it on a different
+        physical infrastructure host from other servers.
+
+        :param uuid:
+            UUID of the server to start.
+        :param allocation_method:
+            Allocation method for the server start.
+        :param avoid:
+            A single server UUID or a comma-separated list of server UUIDs to avoid.
+            The order of the avoid argument UUIDs specifies the order of preference to avoid.
+        :return:
+            The started server definition.
+        """
         data = {}
         if allocation_method:
-            data = {'allocation_method': str(allocation_method)}
-        return self._action(uuid, 'start', data)
+            data['allocation_method'] = str(allocation_method)
+
+        query_params = {}
+        if avoid:
+            if not isinstance(avoid, (list, tuple)):
+                avoid = [avoid]
+            query_params['avoid'] = ','.join(map(str, avoid))
+
+        return self._action(
+            uuid,
+            'start',
+            data=data,
+            query_params=query_params if query_params else None
+        )
 
     def stop(self, uuid):
+        """
+        Stops a server with specific UUID. This action is equivalent to pulling the power cord of a physical server.
+        For more graceful shutdown see :py:meth:`Server.shutdown`.
+
+        :param uuid: UUID of the server.
+        :return: Action result.
+        """
         return self._action(
             uuid,
             'stop',
@@ -305,6 +470,19 @@ class Server(ResourceBase):
         )
 
     def shutdown(self, uuid):
+        """
+        Sends an ACPI shutdown signal to a server with specific UUID for a minute.
+        If the VM OS handles ACPI shutdown events (equivalent to pressing the power button),
+        it will shut down gracefully. As some operating systems don’t always handle single ACPI event
+        the shutdown is sent every second for a minute. While the shutdown is initiated, the server
+        is put into status ``stopping`` to prevent interfering actions. If after a minute the server
+        has not powered off during this minute the status is returned to ``running`` to allow the user
+        to :py:meth:`Server.stop` it. If the server shuts down successfully during the one minute
+        period it will be switched to ``stopped`` status.
+
+        :param uuid: UUID of the server.
+        :return: Action result.
+        """
         return self._action(
             uuid,
             'shutdown',
@@ -316,44 +494,84 @@ class Server(ResourceBase):
         return self.c.get(url, return_list=False)
 
     def open_vnc(self, uuid):
-        return self._action(uuid, 'open_vnc', data={})
+        """
+        Server’s console (virtual keyboard, mouse, and display) is exposed to the user through the VNC protocol.
+        The `open_vnc` call opens a VNC tunnel to the server. The returned object contains a `vnc_url` specifying the
+        endpoint to which to connect the VNC client. The password for the VNC connection is specified in the
+        `vnc_password` field on the server definition. Note that the tunnel is not closed until reboot, so if you prefer
+        you can close is using the `close_vnc` action.
+
+        :param uuid:
+            UUID of the server.
+        :return:
+            The VNC URL to connect to.
+        :rtype: str
+        """
+        res_data = self._action(uuid, 'open_vnc', data={})
+        return res_data['vnc_url']
 
     def close_vnc(self, uuid):
+        """
+        Closes a VNC tunnel to a server with specific UUID.
+
+        :param uuid:
+            UUID of the server.
+        :return:
+            Action status.
+        """
         return self._action(uuid, 'close_vnc', data={})
 
     def open_console(self, uuid):
-        return self._action(uuid, 'open_console', data={})
+        """
+        Opens a serial console connection to the server.
+
+        :param uuid: UUID of the server.
+        :return: Console URL string.
+        """
+        res_data = self._action(uuid, 'open_console')
+        return res_data['console_url']
 
     def close_console(self, uuid):
-        return self._action(uuid, 'close_console', data={})
-
-    def clone(self, uuid, data=None, avoid=None):
         """
-        Clone a server. Attached disk drives get cloned and attached to the new
-        server, and attached cdroms get attached to the
-        new server (without cloning).
+        Closes a serial console connection to a server with specific UUID.
+
+        :param uuid: UUID of the server.
+        :return: Action result.
+        """
+        return self._action(uuid, 'close_console')
+
+    def clone(self, uuid, name=None, random_vnc_password=None, avoid=None):
+        """
+        Clones a server. Does cascading clone of server drives, i.e. all disk drives attached to the server are cloned
+        and attached to the new server. CDROM drives attached to the clone source are attached to the clone.
+        IPs of the cloned server are set to DHCP. All other properties of the clone are equal to the original.
 
         :param uuid:
-            Source server for the clone.
-        :param data:
-            Clone server options. Refer to API docs for possible options.
+            UUID of the source server for the clone.
+        :param name:
+            Name of the newly-cloned server.
+        :param random_vnc_password:
+            If True, a new VNC password will be generated for the new server.
         :param avoid:
-            A list of drive or server uuids to avoid for the clone. Avoid
-            attempts to put the cloned drives on a different physical storage
-            host from the drives in *avoid*. If a server uuid is in *avoid* it
-            is internally expanded to the drives attached to the server.
+            A single server or drive UUID or a comma-separated list of server or drive UUIDs to avoid.
+            If a server uuid is in `avoid` it is internally expanded to the drives attached to the server.
+            The order of the avoid argument UUIDs also specifies the order of preference to avoid.
         :return:
             Cloned server definition.
         """
-        data = data or {}
+        data = {}
+        if name is not None:
+            data['name'] = name
+        if random_vnc_password is not None:
+            data['random_vnc_password'] = random_vnc_password
+
         query_params = {}
         if avoid:
-            if isinstance(avoid, basestring):
+            if not isinstance(avoid, (list, tuple)):
                 avoid = [avoid]
-            query_params['avoid'] = ','.join(avoid)
+            query_params['avoid'] = ','.join(map(str, avoid))
 
-        return self._action(uuid, 'clone', data=data,
-                            query_params=query_params)
+        return self._action(uuid, 'clone', data=data, query_params=query_params)
 
     def delete(self, uuid, recurse=None):
         """
@@ -425,8 +643,71 @@ class FirewallPolicy(ResourceBase):
 class Subscriptions(ResourceBase):
     resource_name = 'subscriptions'
 
+    def list(self, status=None, resource=None, query_params=None):
+        """
+        Gets the list of subscriptions of the user.
+
+        :param status:
+            Filters only subscriptions in that status. Can be one of 'active',
+            'inactive', 'expired', 'all', 'notexpired'. Default is 'all'.
+        :type status: basestring
+        :param resource:
+            A list (comma separated) of resources. One or more of:
+            'dssd', 'cpu', 'mem', 'tx', 'ip', 'vlan'.
+        :type resource: list or basestring
+        :param query_params:
+            Additional query parameters.
+        :type query_params: dict
+        :return:
+            List of subscriptions.
+        """
+        _query_params = query_params or {}
+        if status:
+            _query_params['status'] = status
+        if resource:
+            if isinstance(resource, (list, tuple)):
+                _query_params['resource'] = ','.join(resource)
+            else:
+                _query_params['resource'] = resource
+        return super(Subscriptions, self).list(query_params=_query_params)
+
     def extend(self, uuid, data=None):
-        return self._action(uuid, 'extend', data or {})
+        """
+        Extends the subscription.
+
+        :param uuid:
+            ID of the subscription to extend.
+        :type uuid: basestring
+        :param data:
+            Optional data for extension (e.g., new period or end_time).
+            If neither period nor end_time are specified, the creation length
+            of the subscription is used.
+        :type data: dict
+        :return:
+            Extended subscription definition.
+        """
+        data = data or {}
+        return self._action(uuid, 'extend', data)
+
+    def auto_renew(self, uuid, data=None):
+        """
+        Toggles the autorenew flag of the subscription.
+
+        :param uuid:
+            ID of the subscription.
+        :type uuid: basestring
+        :param data:
+            Optional data to set auto_renew (e.g., {'auto_renew': True/False}).
+        :type data: dict
+        :return:
+            Updated subscription definition.
+        """
+        data = data or {}
+        return self._action(uuid, 'auto_renew', data)
+
+
+class GroupedSubscriptions(ResourceBase):
+    resource_name = 'groupedsubscriptions'
 
 
 class SubscriptionCalculator(Subscriptions):
@@ -440,6 +721,22 @@ class SubscriptionCalculator(Subscriptions):
         )
         resp = self.create(data)
         return resp['price']
+
+    def extend(self, calculator_id, data=None):
+        """
+        Calculates the price of extending a subscription.
+
+        :param calculator_id:
+            ID representing a subscription calculator entry.
+        :type calculator_id: basestring
+        :param data:
+            Optional data for extension calculation (e.g., new period or end_time).
+        :type data: dict
+        :return:
+            Price calculation for the extended subscription.
+        """
+        data = data or {}
+        return self._action(calculator_id, 'extend', data)
 
 
 class Ledger(ResourceBase):
@@ -483,9 +780,53 @@ class Accounts(ResourceBase):
         return self._action(
             None, 'create', data={'email': email, 'promo': promo_code})
 
+    def login(self, username, password):
+        """
+        Log in to the system using cookie auth
+        :param username:
+        :param password:
+        :return:
+        """
+        data = {
+            'username': username,
+            'password': password
+        }
+        return self._action(uuid=None, action='login', data=data)
+
+    def logout(self):
+        """
+        Logout from the system when using cookie auth
+        :return:
+        """
+        return self._action(uuid=None, action='logout', data={})
+
+    def check_login(self):
+        """
+        Check if you are logged in to the system
+        :return:
+        """
+        return self._action(uuid=None, action='check_login', data={})
+
+    def check_login_with_return_uuid(self, username, password):
+        """
+        Check how an authenticated service can get a user uuid via Cloudsigma API
+        :param username:
+        :param password:
+        :return:
+        """
+        data = {
+            'username': username,
+            'password': password
+        }
+        return self._action(uuid=None, action='check_login_with_return_uuid', data=data)
+
 
 class CurrentUsage(ResourceBase):
     resource_name = 'currentusage'
+
+
+class Usage(ResourceBase):
+    resource_name = 'usage'
 
 
 class Snapshot(ResourceBase):
@@ -493,52 +834,89 @@ class Snapshot(ResourceBase):
 
     def clone(self, uuid, data=None, avoid=None):
         """
-        Clones a snapshot (creates a drive).
+        Clones a snapshot to a drive.
 
         :param uuid:
-            Source snapshot for the clone.
+            UUID of the snapshot to clone.
+        :type uuid: basestring
         :param data:
-            Clone snapshot options. Refer to API docs for possible options.
+            Request body for the cloned drive definition. Optional.
+        :type data: dict
         :param avoid:
-            A list of snapshot or server uuids to avoid for the clone. Avoid
-            attempts to put the clone on a different physical storage host from
-            the snapshot in *avoid*. If a server uuid is in *avoid* it is
-            internally expanded to the snapshots attached to the server.
+            A list of drive or server uuids to avoid for the clone.
+            Avoid attempts to put the clone on a different physical storage
+            host from the drives in *avoid*.
+        :type avoid: list or basestring
         :return:
-            Cloned snapshot definition.
+            Cloned drive definition.
         """
         data = data or {}
         query_params = {}
+        # Assuming basestring is defined for Python 2/3 compatibility
+        # as seen in the example Drive class.
+        _basestring_types = (str, bytes) if hasattr(__builtins__, 'bytes') else basestring
         if avoid:
-            if isinstance(avoid, basestring):
+            if isinstance(avoid, _basestring_types):
                 avoid = [avoid]
             query_params['avoid'] = ','.join(avoid)
 
         return self._action(uuid, 'clone', data, query_params=query_params)
 
+    def delete_multiple(self, data):
+        """
+        Deletes multiple snapshots specified by their UUIDs.
+
+        :param data:
+            A dictionary containing an 'objects' key, which is a list of dictionaries,
+            each with a 'uuid' key for the snapshots to delete.
+            Example: {'objects': [{'uuid': 'uuid1'}, {'uuid': 'uuid2'}]}
+        :type data: dict
+        :return:
+            Response from the DELETE operation (204 No Content expected).
+        """
+        url = self._get_url()
+        return self.c.delete(url, data=data, return_list=False)
+
 
 class Tags(ResourceBase):
     resource_name = 'tags'
 
-    def list_resource(self, uuid, resource_name):
-        url = '{base}{tag_uuid}/{res_name}/'.format(
-            base=self._get_url(),
-            tag_uuid=uuid,
-            res_name=resource_name
-        )
-        return self.c.get(url, return_list=True)
+    def list_resources(self, uuid, resource_type, query_params=None):
+        """
+        Lists the objects of the given resource_type which is one of 'servers', 'drives', 'ips', 'vlans'.
+
+        :param uuid:
+            UUID of the tag.
+        :type uuid: basestring
+        :param resource_type:
+            Type of resource to list. Must be one of 'servers', 'drives', 'ips', 'vlans'.
+        :type resource_type: basestring
+        :param query_params:
+            Additional query parameters to pass to the API call.
+        :type query_params: dict
+        :return:
+            A list of resources associated with the tag.
+        :rtype: list
+        """
+        url = self._get_url() + uuid + '/' + resource_type + '/'
+        _query_params = {
+            'limit': 0,  # get all results, do not use pagination
+        }
+        if query_params:
+            _query_params.update(query_params)
+        return self.c.get(url, query_params=_query_params, return_list=True)
 
     def drives(self, uuid):
-        return self.list_resource(uuid, 'drives')
+        return self.list_resources(uuid, 'drives')
 
     def servers(self, uuid):
-        return self.list_resource(uuid, 'servers')
+        return self.list_resources(uuid, 'servers')
 
     def ips(self, uuid):
-        return self.list_resource(uuid, 'ips')
+        return self.list_resources(uuid, 'ips')
 
     def vlans(self, uuid):
-        return self.list_resource(uuid, 'vlans')
+        return self.list_resources(uuid, 'vlans')
 
 
 class Acls(ResourceBase):
@@ -639,6 +1017,10 @@ class BurstUsage(ResourceBase):
     resource_name = 'burstusage'
 
 
+class DailyBurstUsage(ResourceBase):
+    resource_name = 'dailyburstusage'
+
+
 class Locations(ResourceBase):
     resource_name = 'locations'
 
@@ -648,16 +1030,16 @@ class RemoteSnapshot(ResourceBase):
 
     def clone(self, uuid, data=None, avoid=None):
         """
-        Clone a drive from a remote snapshot.
+        Clone a remote snapshot to a drive.
 
         :param uuid:
-            Source drive for the clone.
+            Source remote snapshot for the clone.
         :param data:
             Clone drive options. Refer to API docs for possible options.
         :param avoid:
             A list of drive or server uuids to avoid for the clone.
-            Avoid attempts to put the clone on a different
-            physical storage host from the drives in *avoid*.
+            Avoid attempts to put the clone on a different physical storage
+            host from the drives in *avoid*.
             If a server uuid is in *avoid* it is internally expanded
             to the drives attached to the server.
         :return:
@@ -671,6 +1053,17 @@ class RemoteSnapshot(ResourceBase):
             query_params['avoid'] = ','.join(avoid)
 
         return self._action(uuid, 'clone', data, query_params=query_params)
+
+    def delete_multiple(self, uuids):
+        """
+        Deletes multiple remote snapshots specified by their UUIDs.
+
+        :param uuids:
+            A list of remote snapshot UUIDs to delete.
+        """
+        data = {'objects': [{'uuid': u} for u in uuids]}
+        url = self._get_url()
+        return self.c.delete(url, data=data)
 
 
 class Vpc(ResourceBase):
@@ -691,6 +1084,25 @@ class HostAllocationPools(ResourceBase):
 
 class DriveUsers(ResourceBase):
     resource_name = 'driveusers'
+
+
+class BackupSchedulers(ResourceBase):
+    resource_name = 'backupschedulers'
+
+    def delete_multiple(self, uuids, query_params=None):
+        """
+        Deletes multiple backup schedulers specified by their UUIDs.
+
+        :param uuids:
+            A list of backup scheduler UUIDs to delete.
+        :type uuids: list[str]
+        :param query_params:
+            Additional query parameters to send with the request.
+        :return:
+        """
+        url = self._get_url()
+        data = {'objects': [{'uuid': uuid} for uuid in uuids]}
+        return self.c.delete(url, data=data, query_params=query_params)
 
 
 class VirtualRouters(ResourceBase):
@@ -782,3 +1194,16 @@ class VrFwFilters(ResourceBase):
 
 class Routes(ResourceBase):
     resource_name = 'routes'
+
+
+class Keypairs(ResourceBase):
+    resource_name = 'keypairs'
+
+
+class Pubkeys(ResourceBase):
+    resource_name = 'pubkeys'
+
+
+class VmwareServers(ResourceBase):
+    resource_name = 'vmware_servers'
+
