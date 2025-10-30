@@ -972,5 +972,13 @@ class Routes(ResourceBase):
     resource_name = 'routes'
 
 
+class Keypairs(ResourceBase):
+    resource_name = 'keypairs'
+
+
+class Pubkeys(ResourceBase):
+    resource_name = 'pubkeys'
+
+
 class VmwareServers(ResourceBase):
     resource_name = 'vmware_servers'
