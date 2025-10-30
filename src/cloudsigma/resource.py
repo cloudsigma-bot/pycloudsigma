@@ -602,8 +602,71 @@ class FirewallPolicy(ResourceBase):
 class Subscriptions(ResourceBase):
     resource_name = 'subscriptions'
 
+    def list(self, status=None, resource=None, query_params=None):
+        """
+        Gets the list of subscriptions of the user.
+
+        :param status:
+            Filters only subscriptions in that status. Can be one of 'active',
+            'inactive', 'expired', 'all', 'notexpired'. Default is 'all'.
+        :type status: basestring
+        :param resource:
+            A list (comma separated) of resources. One or more of:
+            'dssd', 'cpu', 'mem', 'tx', 'ip', 'vlan'.
+        :type resource: list or basestring
+        :param query_params:
+            Additional query parameters.
+        :type query_params: dict
+        :return:
+            List of subscriptions.
+        """
+        _query_params = query_params or {}
+        if status:
+            _query_params['status'] = status
+        if resource:
+            if isinstance(resource, (list, tuple)):
+                _query_params['resource'] = ','.join(resource)
+            else:
+                _query_params['resource'] = resource
+        return super(Subscriptions, self).list(query_params=_query_params)
+
     def extend(self, uuid, data=None):
-        return self._action(uuid, 'extend', data or {})
+        """
+        Extends the subscription.
+
+        :param uuid:
+            ID of the subscription to extend.
+        :type uuid: basestring
+        :param data:
+            Optional data for extension (e.g., new period or end_time).
+            If neither period nor end_time are specified, the creation length
+            of the subscription is used.
+        :type data: dict
+        :return:
+            Extended subscription definition.
+        """
+        data = data or {}
+        return self._action(uuid, 'extend', data)
+
+    def auto_renew(self, uuid, data=None):
+        """
+        Toggles the autorenew flag of the subscription.
+
+        :param uuid:
+            ID of the subscription.
+        :type uuid: basestring
+        :param data:
+            Optional data to set auto_renew (e.g., {'auto_renew': True/False}).
+        :type data: dict
+        :return:
+            Updated subscription definition.
+        """
+        data = data or {}
+        return self._action(uuid, 'auto_renew', data)
+
+
+class GroupedSubscriptions(ResourceBase):
+    resource_name = 'groupedsubscriptions'
 
 
 class SubscriptionCalculator(Subscriptions):
@@ -617,6 +680,22 @@ class SubscriptionCalculator(Subscriptions):
         )
         resp = self.create(data)
         return resp['price']
+
+    def extend(self, calculator_id, data=None):
+        """
+        Calculates the price of extending a subscription.
+
+        :param calculator_id:
+            ID representing a subscription calculator entry.
+        :type calculator_id: basestring
+        :param data:
+            Optional data for extension calculation (e.g., new period or end_time).
+        :type data: dict
+        :return:
+            Price calculation for the extended subscription.
+        """
+        data = data or {}
+        return self._action(calculator_id, 'extend', data)
 
 
 class Ledger(ResourceBase):
