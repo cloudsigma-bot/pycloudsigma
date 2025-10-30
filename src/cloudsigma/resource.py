@@ -335,6 +335,28 @@ class InitUpload(ResourceBase):
 class Server(ResourceBase):
     resource_name = 'servers'
 
+    def list_availability_groups(self):
+        """
+        Returns which running servers share the same physical computer host.
+        Returns an array containing arrays. Each inner array holds the UUIDs of servers
+        that reside on the same physical host. Non-running servers are not in the
+        array as they are on any host.
+        """
+        url = self._get_url() + 'availability_groups/'
+        return self.c.get(url, return_list=True)
+
+    def get_availability_group(self, uuid):
+        """
+        Queries in which other servers share the same physical host as the given one.
+        Returns an array holding server UUIDs. The response includes also the UUID
+        of the queried server. If the queried server is not running, the array will be empty.
+
+        :param uuid:
+            UUID of the server.
+        """
+        url = self._get_url() + 'availability_groups/%s/' % uuid
+        return self.c.get(url, return_list=True)
+
     def delete_recursive(self, uuid, recurse_option):
         """
         Deletes a server and optionally its attached drives.
@@ -353,18 +375,37 @@ class Server(ResourceBase):
         query_params = {'recurse': recurse_option}
         return self.delete(uuid, query_params=query_params)
 
-    def start(self, uuid, allocation_method=None):
+    def start(self, uuid, allocation_method=None, avoid=None):
         """
-        Starts a server with specific UUID.
+        Starts a server with a specific UUID, optionally attempting to run it on a different
+        physical infrastructure host from other servers.
 
-        :param uuid: UUID of the server.
-        :param allocation_method: Allocation method for the server start.
-        :return: Action result.
+        :param uuid:
+            UUID of the server to start.
+        :param allocation_method:
+            Allocation method for the server start.
+        :param avoid:
+            A single server UUID or a comma-separated list of server UUIDs to avoid.
+            The order of the avoid argument UUIDs specifies the order of preference to avoid.
+        :return:
+            The started server definition.
         """
         data = {}
         if allocation_method:
-            data = {'allocation_method': str(allocation_method)}
-        return self._action(uuid, 'start', data)
+            data['allocation_method'] = str(allocation_method)
+
+        query_params = {}
+        if avoid:
+            if not isinstance(avoid, (list, tuple)):
+                avoid = [avoid]
+            query_params['avoid'] = ','.join(map(str, avoid))
+
+        return self._action(
+            uuid,
+            'start',
+            data=data,
+            query_params=query_params if query_params else None
+        )
 
     def stop(self, uuid):
         """
@@ -471,11 +512,9 @@ class Server(ResourceBase):
         :param random_vnc_password:
             If True, a new VNC password will be generated for the new server.
         :param avoid:
-            A list of drive or server uuids to avoid for the clone.
-            Avoid attempts to put the clone on a different physical storage
-            host from the drives in *avoid*.
-            If a server uuid is in *avoid* it is internally expanded
-            to the drives attached to the server.
+            A single server or drive UUID or a comma-separated list of server or drive UUIDs to avoid.
+            If a server uuid is in `avoid` it is internally expanded to the drives attached to the server.
+            The order of the avoid argument UUIDs also specifies the order of preference to avoid.
         :return:
             Cloned server definition.
         """
@@ -487,9 +526,9 @@ class Server(ResourceBase):
 
         query_params = {}
         if avoid:
-            if isinstance(avoid, basestring):  # Assuming basestring is available for Python 2/3 compatibility
+            if not isinstance(avoid, (list, tuple)):
                 avoid = [avoid]
-            query_params['avoid'] = ','.join(avoid)
+            query_params['avoid'] = ','.join(map(str, avoid))
 
         return self._action(uuid, 'clone', data=data, query_params=query_params)
 
