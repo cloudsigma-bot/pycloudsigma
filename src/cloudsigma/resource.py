@@ -264,6 +264,27 @@ class Drive(ResourceBase):
         url = self._get_url()
         return self.c.delete(url, data=data, query_params=query_params)
 
+    def set_scheduler(self, drive_uuid, backup_policy_uuid, data=None, query_params=None):
+        """
+        Link a scheduler to a drive.
+
+        :param drive_uuid:
+            UUID of the drive to link the scheduler to.
+        :type drive_uuid: str
+        :param backup_policy_uuid:
+            UUID of the backup policy to set.
+        :type backup_policy_uuid: str
+        :param data:
+            Additional data for the action (optional).
+        :param query_params:
+            Additional query parameters to send with the request.
+        :return:
+            Updated drive definition.
+        """
+        data = data or {}
+        data['backup_policy_uuid'] = backup_policy_uuid
+        return self._action(drive_uuid, 'set_scheduler', data, query_params=query_params)
+
 
 class InitUpload(ResourceBase):
     resource_name = 'initupload'
@@ -727,6 +748,25 @@ class HostAllocationPools(ResourceBase):
 
 class DriveUsers(ResourceBase):
     resource_name = 'driveusers'
+
+
+class BackupSchedulers(ResourceBase):
+    resource_name = 'backupschedulers'
+
+    def delete_multiple(self, uuids, query_params=None):
+        """
+        Deletes multiple backup schedulers specified by their UUIDs.
+
+        :param uuids:
+            A list of backup scheduler UUIDs to delete.
+        :type uuids: list[str]
+        :param query_params:
+            Additional query parameters to send with the request.
+        :return:
+        """
+        url = self._get_url()
+        data = {'objects': [{'uuid': uuid} for uuid in uuids]}
+        return self.c.delete(url, data=data, query_params=query_params)
 
 
 class VirtualRouters(ResourceBase):
