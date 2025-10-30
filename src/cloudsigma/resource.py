@@ -1198,6 +1198,3 @@ class Pubkeys(ResourceBase):
 
 class VmwareServers(ResourceBase):
     resource_name = 'vmware_servers'
-
-
-
