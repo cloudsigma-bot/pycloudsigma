@@ -299,6 +299,21 @@ class Drive(ResourceBase):
         data['backup_policy_uuid'] = backup_policy_uuid
         return self._action(drive_uuid, 'set_scheduler', data, query_params=query_params)
 
+    def delete_multiple(self, data):
+        """
+        Deletes multiple drives specified by their UUIDs.
+
+        :param data:
+            A list of drive UUIDs or a dictionary with an 'objects' key
+            containing a list of dictionaries with 'uuid' keys.
+            Example: [{'uuid': 'uuid1'}, {'uuid': 'uuid2'}] or
+            {'objects': [{'uuid': 'uuid1'}, {'uuid': 'uuid2'}]}.
+        :return:
+            None (204 No Content)
+        """
+        url = self._get_url()
+        return self.c.delete(url, data=self._pepare_data(data))
+
 
 class InitUpload(ResourceBase):
     resource_name = 'initupload'
