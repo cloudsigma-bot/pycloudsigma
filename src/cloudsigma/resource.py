@@ -883,3 +883,8 @@ class VrFwFilters(ResourceBase):
 
 class Routes(ResourceBase):
     resource_name = 'routes'
+
+
+class VmwareServers(ResourceBase):
+    resource_name = 'vmware_servers'
+
