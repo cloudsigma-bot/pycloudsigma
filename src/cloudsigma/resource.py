@@ -739,6 +739,46 @@ class Accounts(ResourceBase):
         return self._action(
             None, 'create', data={'email': email, 'promo': promo_code})
 
+    def login(self, username, password):
+        """
+        Log in to the system using cookie auth
+        :param username:
+        :param password:
+        :return:
+        """
+        data = {
+            'username': username,
+            'password': password
+        }
+        return self._action(uuid=None, action='login', data=data)
+
+    def logout(self):
+        """
+        Logout from the system when using cookie auth
+        :return:
+        """
+        return self._action(uuid=None, action='logout', data={})
+
+    def check_login(self):
+        """
+        Check if you are logged in to the system
+        :return:
+        """
+        return self._action(uuid=None, action='check_login', data={})
+
+    def check_login_with_return_uuid(self, username, password):
+        """
+        Check how an authenticated service can get a user uuid via Cloudsigma API
+        :param username:
+        :param password:
+        :return:
+        """
+        data = {
+            'username': username,
+            'password': password
+        }
+        return self._action(uuid=None, action='check_login_with_return_uuid', data=data)
+
 
 class CurrentUsage(ResourceBase):
     resource_name = 'currentusage'
