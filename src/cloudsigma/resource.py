@@ -143,6 +143,20 @@ class NotificationPreference(ResourceBase):
 class LibDrive(ResourceBase):
     resource_name = 'libdrives'
 
+    def clone(self, uuid, data=None):
+        """
+        Clones a library drive.
+
+        :param uuid:
+            Source library drive for the clone.
+        :param data:
+            Clone drive options. Refer to API docs for possible options.
+        :return:
+            Cloned drive definition.
+        """
+        data = data or {}
+        return self._action(uuid, 'clone', data)
+
 
 class Drive(ResourceBase):
     resource_name = 'drives'
