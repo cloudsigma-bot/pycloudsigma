@@ -509,28 +509,48 @@ class Snapshot(ResourceBase):
 
     def clone(self, uuid, data=None, avoid=None):
         """
-        Clones a snapshot (creates a drive).
+        Clones a snapshot to a drive.
 
         :param uuid:
-            Source snapshot for the clone.
+            UUID of the snapshot to clone.
+        :type uuid: basestring
         :param data:
-            Clone snapshot options. Refer to API docs for possible options.
+            Request body for the cloned drive definition. Optional.
+        :type data: dict
         :param avoid:
-            A list of snapshot or server uuids to avoid for the clone. Avoid
-            attempts to put the clone on a different physical storage host from
-            the snapshot in *avoid*. If a server uuid is in *avoid* it is
-            internally expanded to the snapshots attached to the server.
+            A list of drive or server uuids to avoid for the clone.
+            Avoid attempts to put the clone on a different physical storage
+            host from the drives in *avoid*.
+        :type avoid: list or basestring
         :return:
-            Cloned snapshot definition.
+            Cloned drive definition.
         """
         data = data or {}
         query_params = {}
+        # Assuming basestring is defined for Python 2/3 compatibility
+        # as seen in the example Drive class.
+        _basestring_types = (str, bytes) if hasattr(__builtins__, 'bytes') else basestring
         if avoid:
-            if isinstance(avoid, basestring):
+            if isinstance(avoid, _basestring_types):
                 avoid = [avoid]
             query_params['avoid'] = ','.join(avoid)
 
         return self._action(uuid, 'clone', data, query_params=query_params)
+
+    def delete_multiple(self, data):
+        """
+        Deletes multiple snapshots specified by their UUIDs.
+
+        :param data:
+            A dictionary containing an 'objects' key, which is a list of dictionaries,
+            each with a 'uuid' key for the snapshots to delete.
+            Example: {'objects': [{'uuid': 'uuid1'}, {'uuid': 'uuid2'}]}
+        :type data: dict
+        :return:
+            Response from the DELETE operation (204 No Content expected).
+        """
+        url = self._get_url()
+        return self.c.delete(url, data=data, return_list=False)
 
 
 class Tags(ResourceBase):
@@ -798,4 +818,3 @@ class VrFwFilters(ResourceBase):
 
 class Routes(ResourceBase):
     resource_name = 'routes'
-
