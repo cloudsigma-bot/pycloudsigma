@@ -335,13 +335,45 @@ class InitUpload(ResourceBase):
 class Server(ResourceBase):
     resource_name = 'servers'
 
+    def delete_recursive(self, uuid, recurse_option):
+        """
+        Deletes a server and optionally its attached drives.
+
+        :param uuid:
+            UUID of the server.
+        :param recurse_option:
+            'all_drives': All attached drives regardless of media type will be deleted.
+            'disks': Only attached drives with media type 'disk' will be deleted.
+            'cdroms': Only attached drives with media type 'cdrom' will be deleted.
+        """
+        if recurse_option not in ['all_drives', 'disks', 'cdroms']:
+            raise ValueError(
+                "recurse_option must be one of 'all_drives', 'disks', 'cdroms'"
+            )
+        query_params = {'recurse': recurse_option}
+        return self.delete(uuid, query_params=query_params)
+
     def start(self, uuid, allocation_method=None):
+        """
+        Starts a server with specific UUID.
+
+        :param uuid: UUID of the server.
+        :param allocation_method: Allocation method for the server start.
+        :return: Action result.
+        """
         data = {}
         if allocation_method:
             data = {'allocation_method': str(allocation_method)}
         return self._action(uuid, 'start', data)
 
     def stop(self, uuid):
+        """
+        Stops a server with specific UUID. This action is equivalent to pulling the power cord of a physical server.
+        For more graceful shutdown see :py:meth:`Server.shutdown`.
+
+        :param uuid: UUID of the server.
+        :return: Action result.
+        """
         return self._action(
             uuid,
             'stop',
@@ -356,6 +388,19 @@ class Server(ResourceBase):
         )
 
     def shutdown(self, uuid):
+        """
+        Sends an ACPI shutdown signal to a server with specific UUID for a minute.
+        If the VM OS handles ACPI shutdown events (equivalent to pressing the power button),
+        it will shut down gracefully. As some operating systems don’t always handle single ACPI event
+        the shutdown is sent every second for a minute. While the shutdown is initiated, the server
+        is put into status ``stopping`` to prevent interfering actions. If after a minute the server
+        has not powered off during this minute the status is returned to ``running`` to allow the user
+        to :py:meth:`Server.stop` it. If the server shuts down successfully during the one minute
+        period it will be switched to ``stopped`` status.
+
+        :param uuid: UUID of the server.
+        :return: Action result.
+        """
         return self._action(
             uuid,
             'shutdown',
@@ -373,38 +418,58 @@ class Server(ResourceBase):
         return self._action(uuid, 'close_vnc', data={})
 
     def open_console(self, uuid):
-        return self._action(uuid, 'open_console', data={})
+        """
+        Opens a serial console connection to the server.
+
+        :param uuid: UUID of the server.
+        :return: Console URL string.
+        """
+        res_data = self._action(uuid, 'open_console')
+        return res_data['console_url']
 
     def close_console(self, uuid):
-        return self._action(uuid, 'close_console', data={})
-
-    def clone(self, uuid, data=None, avoid=None):
         """
-        Clone a server. Attached disk drives get cloned and attached to the new
-        server, and attached cdroms get attached to the
-        new server (without cloning).
+        Closes a serial console connection to a server with specific UUID.
+
+        :param uuid: UUID of the server.
+        :return: Action result.
+        """
+        return self._action(uuid, 'close_console')
+
+    def clone(self, uuid, name=None, random_vnc_password=None, avoid=None):
+        """
+        Clones a server. Does cascading clone of server drives, i.e. all disk drives attached to the server are cloned
+        and attached to the new server. CDROM drives attached to the clone source are attached to the clone.
+        IPs of the cloned server are set to DHCP. All other properties of the clone are equal to the original.
 
         :param uuid:
-            Source server for the clone.
-        :param data:
-            Clone server options. Refer to API docs for possible options.
+            UUID of the source server for the clone.
+        :param name:
+            Name of the newly-cloned server.
+        :param random_vnc_password:
+            If True, a new VNC password will be generated for the new server.
         :param avoid:
-            A list of drive or server uuids to avoid for the clone. Avoid
-            attempts to put the cloned drives on a different physical storage
-            host from the drives in *avoid*. If a server uuid is in *avoid* it
-            is internally expanded to the drives attached to the server.
+            A list of drive or server uuids to avoid for the clone.
+            Avoid attempts to put the clone on a different physical storage
+            host from the drives in *avoid*.
+            If a server uuid is in *avoid* it is internally expanded
+            to the drives attached to the server.
         :return:
             Cloned server definition.
         """
-        data = data or {}
+        data = {}
+        if name is not None:
+            data['name'] = name
+        if random_vnc_password is not None:
+            data['random_vnc_password'] = random_vnc_password
+
         query_params = {}
         if avoid:
-            if isinstance(avoid, basestring):
+            if isinstance(avoid, basestring):  # Assuming basestring is available for Python 2/3 compatibility
                 avoid = [avoid]
             query_params['avoid'] = ','.join(avoid)
 
-        return self._action(uuid, 'clone', data=data,
-                            query_params=query_params)
+        return self._action(uuid, 'clone', data=data, query_params=query_params)
 
     def delete(self, uuid, recurse=None):
         """
@@ -887,4 +952,3 @@ class Routes(ResourceBase):
 
 class VmwareServers(ResourceBase):
     resource_name = 'vmware_servers'
-
